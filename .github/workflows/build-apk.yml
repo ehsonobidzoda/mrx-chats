@@ -1,0 +1,40 @@
+name: Build APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Create Flutter project
+        run: flutter create --org tj.paymbar --project-name paymbar app
+      - name: Copy app code
+        run: cp main_v2.dart app/lib/main.dart
+      - name: Add package, permissions, minSdk
+        working-directory: app
+        run: |
+          flutter pub add nearby_connections
+          M=android/app/src/main/AndroidManifest.xml
+          for p in ACCESS_WIFI_STATE CHANGE_WIFI_STATE ACCESS_COARSE_LOCATION ACCESS_FINE_LOCATION BLUETOOTH_ADVERTISE BLUETOOTH_CONNECT BLUETOOTH_SCAN NEARBY_WIFI_DEVICES; do
+            sed -i "/<application/i\    <uses-permission android:name=\"android.permission.$p\"/>" $M
+          done
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>' $M
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>' $M
+          sed -i 's/flutter\.minSdkVersion/23/' android/app/build.gradle android/app/build.gradle.kts 2>/dev/null || true
+      - name: Build APK
+        working-directory: app
+        run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paymbar-apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk
